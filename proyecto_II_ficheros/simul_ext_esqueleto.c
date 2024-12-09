@@ -26,6 +26,33 @@ void GrabarDatos(EXT_DATOS *memdatos, FILE *fich) {
     printf("Datos grabados correctamente.\n");
 }
 
+//Implementacion de ByteMaps
+void Bytemaps(EXT_BYTE_MAPS *bytemaps) {
+
+    printf("Inodos :");
+    for (int i = 0; i < MAX_INODOS; i++) {
+        printf(" %d ", bytemaps->bmap_inodos[i]);
+    }
+    printf("\n");
+
+    printf("Bloques [0-25] : ");
+    for (int i = 0; i < 26; i++) {
+        printf(" %d ", bytemaps->bmap_bloques[i]);
+    }
+    printf("\n");
+
+}
+
+//Implementación de info
+void Info(EXT_SIMPLE_SUPERBLOCK *superbloque) {
+    printf("Bloque 512 Bytes\n");
+    printf("Inodos particion = %u\n", superbloque->s_inodes_count);
+    printf("Inodos libres = %u\n", superbloque->s_free_inodes_count);
+    printf("Bloques particion = %u\n", superbloque->s_blocks_count);
+    printf("Bloques libres = %u\n", superbloque->s_free_blocks_count);
+    printf("Primer bloque de datos = %u\n", superbloque->s_first_data_block);
+}
+
 // Función principal
 int main() {
     // Variables necesarias
@@ -61,9 +88,15 @@ int main() {
 
         if (strcmp(orden, "dir") == 0) {
             Directorio(directorio, &ext_blq_inodos);
-        } else {
-            printf("ERROR: Comando ilegal [bytemaps,copy,info,imprimir,rename,salir].\n");
+        }else if (strcmp(orden, "bytemaps") == 0) {
+            Bytemaps(&bytemaps);
+        }else if (strcmp(orden, "info") == 0){
+            Info(&superbloque);
+        }else {
+            printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
         }
+
+
     } while (1);
 
     // Guardar cambios en el archivo binario
