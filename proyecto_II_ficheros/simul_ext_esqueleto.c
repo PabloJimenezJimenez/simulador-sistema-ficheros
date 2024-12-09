@@ -8,16 +8,34 @@ int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argu
     sscanf(strcomando, "%s %s %s", orden, argumento1, argumento2);
     return strcmp(orden, "salir") != 0; // Retorna 0 si el comando es "salir"
 }
+unsigned int NumeroBloques(EXT_SIMPLE_INODE *inodo){
+    for (int j = 0; j < MAX_NUMS_BLOQUE_INODO; j++) {
+        if (inodo->i_nbloque[j] != NULL_BLOQUE) { // Bloque válido
+            return inodo->i_nbloque[j];
+        }
+    }
+    return 0;
+}
 
 // Implementación de Directorio
 void Directorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos) {
-    printf("Lista de archivos en el directorio:\n");
-    for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (directorio[i].dir_inodo != NULL_INODO) {
-            printf("Archivo: %s, Inodo: %d\n", directorio[i].dir_nfich, directorio[i].dir_inodo);
+    for (int i = 1; i < MAX_FICHEROS; i++) {
+        if (directorio[i].dir_inodo != NULL_INODO) { // Verificar si el inodo está ocupado
+            unsigned short inodo_index = directorio[i].dir_inodo;
+            EXT_SIMPLE_INODE *inodo = &inodos->blq_inodos[inodo_index]; // Obtener inodo correspondiente
+            unsigned int numeroBloques = NumeroBloques(inodo);
+            // Mostrar información del archivo
+            printf("%-15s  tamaño:%-10u   inodo:%-2d bloques:%u",
+                   directorio[i].dir_nfich,
+                   inodo->size_fichero,
+                   inodo_index,
+                   numeroBloques);
+
+            printf("\n"); // Nueva línea para el siguiente archivo
         }
     }
 }
+
 
 // Implementación de GrabarDatos
 void GrabarDatos(EXT_DATOS *memdatos, FILE *fich) {
@@ -45,7 +63,7 @@ void Bytemaps(EXT_BYTE_MAPS *bytemaps) {
 
 //Implementación de info
 void Info(EXT_SIMPLE_SUPERBLOCK *superbloque) {
-    printf("Bloque 512 Bytes\n");
+    printf("Bloque %u bytes\n", superbloque->s_block_size);
     printf("Inodos particion = %u\n", superbloque->s_inodes_count);
     printf("Inodos libres = %u\n", superbloque->s_free_inodes_count);
     printf("Bloques particion = %u\n", superbloque->s_blocks_count);
