@@ -67,7 +67,7 @@ int main() {
     // Inicialización del sistema
     fent = fopen("particion.bin", "rb+"); // Abre el archivo binario
     if (fent == NULL) {
-        perror("Error al abrir el archivo particion.bin");
+        perror("Errorr al abrir el archivo particion.bin");
         return 1;
     }
 
