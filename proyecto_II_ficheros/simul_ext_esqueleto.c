@@ -70,7 +70,63 @@ void Info(EXT_SIMPLE_SUPERBLOCK *superbloque) {
     printf("Bloques libres = %u\n", superbloque->s_free_blocks_count);
     printf("Primer bloque de datos = %u\n", superbloque->s_first_data_block);
 }
+void imprimirFichero(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *blq_inodos, unsigned char *particion, char *nombreFichero) {
+    int i, encontrado = 0;
+    unsigned short int num_inodo = 0xFFFF;
 
+    // 1. Buscar el fichero en el directorio
+    for (i = 1; i < MAX_FICHEROS; i++) {
+        if (strcmp(directorio[i].dir_nfich, nombreFichero) == 0) {
+            num_inodo = directorio[i].dir_inodo;
+            encontrado = 1;
+            break;
+        }
+    }
+
+    // Si no se encuentra el fichero, mostrar error
+    if (!encontrado) {
+        printf("Error: Fichero no encontrado\n");
+        return;
+    }
+
+    // 2. Obtener inodo
+    EXT_SIMPLE_INODE *inodo = &(blq_inodos->blq_inodos[num_inodo]);
+
+    // 3. Verificar que el fichero tiene contenido
+    if (inodo->size_fichero == 0) {
+        printf("El fichero está vacío\n");
+        return;
+    }
+    // Recorrer los bloques del inodo
+    for (i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
+        // Parar si no hay más bloques (marcador FFFF)
+        if (inodo->i_nbloque[i] == 0xFFFF) {
+            break;
+        }
+
+        // Calcular dirección del bloque en la partición
+        unsigned char *bloque = particion + (inodo->i_nbloque[i] * SIZE_BLOQUE);
+
+        // Imprimir contenido del bloque
+        // Si es el último bloque, imprimir solo hasta size_fichero
+        if (i == (MAX_NUMS_BLOQUE_INODO - 1) || inodo->i_nbloque[i+1] == 0xFFFF) {
+            // Último bloque, imprimir solo bytes necesarios
+            int bytes_a_imprimir = inodo->size_fichero % SIZE_BLOQUE;
+            if (bytes_a_imprimir == 0) bytes_a_imprimir = SIZE_BLOQUE;
+
+            for (int j = 0; j < bytes_a_imprimir; j++) {
+                printf("%c", bloque[j]);
+            }
+        } else {
+            // Bloque completo
+            for (int j = 0; j < SIZE_BLOQUE; j++) {
+                printf("%c", bloque[j]);
+            }
+        }
+    }
+
+    printf("\n");
+}
 // Función principal
 int main() {
     // Variables necesarias
@@ -110,6 +166,28 @@ int main() {
             Bytemaps(&bytemaps);
         }else if (strcmp(orden, "info") == 0){
             Info(&superbloque);
+        }else if (strcmp(orden, "imprimir") == 0){
+            char nombreFichero[LEN_NFICH];
+
+            // Eliminar el salto de línea de fgets
+            comando[strcspn(comando, "\n")] = 0;
+
+            // Extraer el nombre del fichero directamente del comando
+            sscanf(comando + strlen("imprimir"), "%s", nombreFichero);
+
+            // Leer los datos del archivo
+            unsigned char particion[SIZE_BLOQUE * MAX_BLOQUES_PARTICION];
+            fseek(fent, 0, SEEK_SET);
+            fread(particion, 1, sizeof(particion), fent);
+
+            imprimirFichero(directorio, &ext_blq_inodos, particion, nombreFichero);
+        }else if (strcmp(orden, "copy") == 0){
+            printf("Copiar\n");
+        }else if (strcmp(orden, "rename") == 0){
+            printf("Renombrar\n");
+        }else if (strcmp(orden, "remove") == 0)
+        {
+            printf("Remover\n");
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
         }
