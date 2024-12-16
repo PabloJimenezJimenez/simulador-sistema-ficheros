@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "cabeceras.h" // Incluimos el archivo de cabeceras proporcionado
 
@@ -8,28 +9,52 @@ int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argu
     sscanf(strcomando, "%s %s %s", orden, argumento1, argumento2);
     return strcmp(orden, "salir") != 0; // Retorna 0 si el comando es "salir"
 }
-unsigned int NumeroBloques(EXT_SIMPLE_INODE *inodo){
+unsigned int* NumeroBloques(EXT_SIMPLE_INODE *inodo, unsigned int *num_bloques){
+    unsigned int *i_nbloques = NULL;
+    unsigned int capacidad = 0;
+    unsigned int cantidad = 0;
     for (int j = 0; j < MAX_NUMS_BLOQUE_INODO; j++) {
         if (inodo->i_nbloque[j] != NULL_BLOQUE) { // Bloque válido
-            return inodo->i_nbloque[j];
+            unsigned int *temp = realloc(i_nbloques, ++capacidad * sizeof(unsigned int));
+            if (temp == NULL) {
+                // Si realloc falla, liberar memoria previa y manejar el error
+                free(i_nbloques);
+                return 0;
+            }
+            // Actualizar puntero y datos
+            i_nbloques = temp;
+            i_nbloques[cantidad] = inodo->i_nbloque[j];
+            capacidad++;
+            cantidad++;
         }
     }
-    return 0;
+    *num_bloques = cantidad;
+    return i_nbloques;
 }
 
 // Implementación de Directorio
 void Directorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos) {
     for (int i = 1; i < MAX_FICHEROS; i++) {
         if (directorio[i].dir_inodo != NULL_INODO) { // Verificar si el inodo está ocupado
+            unsigned int num_bloques;
             unsigned short inodo_index = directorio[i].dir_inodo;
             EXT_SIMPLE_INODE *inodo = &inodos->blq_inodos[inodo_index]; // Obtener inodo correspondiente
-            unsigned int numeroBloques = NumeroBloques(inodo);
+            unsigned int *numeroBloques = NumeroBloques(inodo, &num_bloques);
             // Mostrar información del archivo
-            printf("%-15s  tamaño:%-10u   inodo:%-2d bloques:%u",
+            printf("%-15s  tamaño:%-10u   inodo:%-2d",
                    directorio[i].dir_nfich,
                    inodo->size_fichero,
-                   inodo_index,
-                   numeroBloques);
+                   inodo_index);
+            if (numeroBloques != NULL) {
+                printf("Bloque: ");
+                // Usar los bloque
+                for (unsigned int i = 0; i < num_bloques; i++) {
+                    printf("%u ", numeroBloques[i]);
+                }
+
+                // Liberar memoria cuando ya no la necesites
+                free(numeroBloques);
+            }
 
             printf("\n"); // Nueva línea para el siguiente archivo
         }
@@ -127,6 +152,34 @@ void imprimirFichero(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *blq_inodos, un
 
     printf("\n");
 }
+
+void renameFile(EXT_ENTRADA_DIR *directorio, char *nombre, char *nuevo_nombre)
+{
+    // Buscar el fichero
+    for (int i = 0; i < MAX_FICHEROS; i++)
+    {
+        //Compruebo que existe el fichero con el nombre
+        if (strcmp(directorio[i].dir_nfich, nombre) == 0)
+        {
+            //Comprobar que no exte un fichero con el nombre nuevo
+            for (int j = 0; j < MAX_FICHEROS; j++)
+            {
+                if (strcmp(directorio[j].dir_nfich, nuevo_nombre) == 0)
+                {
+                    printf("El fichero %s ya existe\n", nuevo_nombre);
+                    return;
+                }
+            }
+            // Cambio el nombre a ese fichero
+            strcpy(directorio[i].dir_nfich, nuevo_nombre);
+            printf("rename %s %s\n", nombre, nuevo_nombre);
+            return;
+        }
+    }
+
+    printf("El fichero %s no existe\n", nombre);
+
+}
 // Función principal
 int main() {
     // Variables necesarias
@@ -184,7 +237,16 @@ int main() {
         }else if (strcmp(orden, "copy") == 0){
             printf("Copiar\n");
         }else if (strcmp(orden, "rename") == 0){
-            printf("Renombrar\n");
+            char nombre[LEN_NFICH];
+            char nuevo_nombre[LEN_NFICH];
+            // Eliminar el salto de línea de fgets
+            comando[strcspn(comando, "\n")] = 0;
+
+            // Extraer el nombre del fichero directamente del comando
+            sscanf(comando + strlen("rename"), "%s %s", nombre, nuevo_nombre);
+            printf("Nombre: %s\n", nombre);
+            printf("Nuevo nombre: %s\n", nuevo_nombre);
+            renameFile(directorio, nombre, nuevo_nombre);
         }else if (strcmp(orden, "remove") == 0)
         {
             printf("Remover\n");
