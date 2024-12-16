@@ -180,6 +180,20 @@ void renameFile(EXT_ENTRADA_DIR *directorio, char *nombre, char *nuevo_nombre)
     printf("El fichero %s no existe\n", nombre);
 
 }
+void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
+{
+    // Buscar el fichero
+    for (int i = 0; i < MAX_FICHEROS; i++)
+    {
+        //Compruebo que existe el fichero con el nombre
+        if (strcmp(directorio[i].dir_nfich, nombre) == 0)
+        {
+            printf("Fichero enncontrado\n");
+            return;
+        }
+    }
+    printf("El fichero %s no existe\n", nombre);
+}
 // Función principal
 int main() {
     // Variables necesarias
@@ -234,8 +248,6 @@ int main() {
             fread(particion, 1, sizeof(particion), fent);
 
             imprimirFichero(directorio, &ext_blq_inodos, particion, nombreFichero);
-        }else if (strcmp(orden, "copy") == 0){
-            printf("Copiar\n");
         }else if (strcmp(orden, "rename") == 0){
             char nombre[LEN_NFICH];
             char nuevo_nombre[LEN_NFICH];
@@ -249,7 +261,17 @@ int main() {
             renameFile(directorio, nombre, nuevo_nombre);
         }else if (strcmp(orden, "remove") == 0)
         {
+            char nombreFichero[LEN_NFICH];
+
+            // Eliminar el salto de línea de fgets
+            comando[strcspn(comando, "\n")] = 0;
+
+            // Extraer el nombre del fichero directamente del comando
+            sscanf(comando + strlen("remove"), "%s", nombreFichero);
             printf("Remover\n");
+            removeFile(directorio, nombreFichero);
+        }else if (strcmp(orden, "copy") == 0){
+            printf("Copiar\n");
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
         }
