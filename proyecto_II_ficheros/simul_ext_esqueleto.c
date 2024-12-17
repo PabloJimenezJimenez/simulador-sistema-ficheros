@@ -95,6 +95,7 @@ void Info(EXT_SIMPLE_SUPERBLOCK *superbloque) {
     printf("Bloques libres = %u\n", superbloque->s_free_blocks_count);
     printf("Primer bloque de datos = %u\n", superbloque->s_first_data_block);
 }
+
 void imprimirFichero(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *blq_inodos, unsigned char *particion, char *nombreFichero) {
     int i, encontrado = 0;
     unsigned short int num_inodo = 0xFFFF;
@@ -180,6 +181,7 @@ void renameFile(EXT_ENTRADA_DIR *directorio, char *nombre, char *nuevo_nombre)
     printf("El fichero %s no existe\n", nombre);
 
 }
+
 void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
 {
     // Buscar el fichero
@@ -193,6 +195,38 @@ void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
         }
     }
     printf("El fichero %s no existe\n", nombre);
+}
+
+void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, char *nombre, char *nombre2)
+{
+    //buscar el fichero
+    for (int i = 0; i < MAX_FICHEROS; i++)
+    {
+        //Compruebo que existe el fichero con el nombre
+        if (strcmp(directorio[i].dir_nfich, nombre) == 0)
+        {
+            //Comprobar que no exte un fichero con el nombre nuevo
+            for (int j = 0; j < MAX_FICHEROS; j++)
+            {
+                if (strcmp(directorio[j].dir_nfich, nombre2) == 0)
+                {
+                    printf("El fichero %s ya existe\n", nombre2);
+                    return;
+                }
+            }
+
+            printf("Entra 1 %s %s\n", nombre, nombre2);
+
+        }
+    }
+
+    for (int i = 0; i < MAX_INODOS; i++) {
+        if (bytemaps->bmap_inodos[i] == 0 )
+        {
+            printf("Entra 2 \n");
+            return;
+        }
+    }
 }
 // Función principal
 int main() {
@@ -256,8 +290,6 @@ int main() {
 
             // Extraer el nombre del fichero directamente del comando
             sscanf(comando + strlen("rename"), "%s %s", nombre, nuevo_nombre);
-            printf("Nombre: %s\n", nombre);
-            printf("Nuevo nombre: %s\n", nuevo_nombre);
             renameFile(directorio, nombre, nuevo_nombre);
         }else if (strcmp(orden, "remove") == 0)
         {
@@ -272,6 +304,15 @@ int main() {
             removeFile(directorio, nombreFichero);
         }else if (strcmp(orden, "copy") == 0){
             printf("Copiar\n");
+            char nombreExistente[LEN_NFICH];
+            char nuevo_nombre[LEN_NFICH];
+            // Eliminar el salto de línea de fgets
+            comando[strcspn(comando, "\n")] = 0;
+
+
+            // Extraer el nombre del fichero directamente del comando
+            sscanf(comando + strlen("copy"), "%s %s", nombreExistente, nuevo_nombre);
+            copyFile(directorio, &bytemaps, nombreExistente, nuevo_nombre);
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
         }
