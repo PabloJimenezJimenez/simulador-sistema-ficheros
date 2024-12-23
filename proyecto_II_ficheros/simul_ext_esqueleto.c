@@ -197,37 +197,108 @@ void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
     printf("El fichero %s no existe\n", nombre);
 }
 
-void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, char *nombre, char *nombre2)
-{
-    //buscar el fichero
-    for (int i = 0; i < MAX_FICHEROS; i++)
-    {
-        //Compruebo que existe el fichero con el nombre
-        if (strcmp(directorio[i].dir_nfich, nombre) == 0)
-        {
-            //Comprobar que no exte un fichero con el nombre nuevo
-            for (int j = 0; j < MAX_FICHEROS; j++)
-            {
-                if (strcmp(directorio[j].dir_nfich, nombre2) == 0)
-                {
-                    printf("El fichero %s ya existe\n", nombre2);
-                    return;
-                }
-            }
+void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos, EXT_DATOS *bloques, char *nombre, char *nombre2) {
 
-            printf("Entra 1 %s %s\n", nombre, nombre2);
-
+    // Buscar el fichero original en el directorio
+    unsigned short int inodo_origen = NULL_INODO;
+    for (int i = 0; i < MAX_FICHEROS; i++) {
+        if (strcmp(directorio[i].dir_nfich, nombre) == 0) {
+            inodo_origen = directorio[i].dir_inodo;
+            break;
         }
     }
 
-    for (int i = 0; i < MAX_INODOS; i++) {
-        if (bytemaps->bmap_inodos[i] == 0 )
-        {
-            printf("Entra 2 \n");
+    // Si no se encuentra el fichero origen
+    if (inodo_origen == NULL_INODO) {
+        printf("No existe ningún fichero con el nombre: %s\n", nombre);
+        return;
+    }
+
+    // Comprobar que no exista un fichero con el nombre nuevo
+    for (int i = 0; i < MAX_FICHEROS; i++) {
+        if (strcmp(directorio[i].dir_nfich, nombre2) == 0) {
+            printf("El fichero %s ya existe\n", nombre2);
             return;
         }
     }
+
+    // Buscar un inodo libre
+    unsigned short int inodo_destino = NULL_INODO;
+    for (int i = 0; i < MAX_INODOS; i++) {
+        if (bytemaps->bmap_inodos[i] == 0) {
+            inodo_destino = i;
+            break;
+        }
+    }
+
+    // Si no hay inodo libre
+    if (inodo_destino == NULL_INODO) {
+        printf("No hay inodos libres disponibles\n");
+        return;
+    }
+
+    // Marcar el inodo como ocupado
+    bytemaps->bmap_inodos[inodo_destino] = 1;
+
+    // Copiar el tamaño del fichero y preparar el inodo destino
+    inodos->blq_inodos[inodo_destino].size_fichero = inodos->blq_inodos[inodo_origen].size_fichero;
+
+    // Inicializar todos los bloques del nuevo inodo a NULL_BLOQUE
+    for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
+        inodos->blq_inodos[inodo_destino].i_nbloque[i] = NULL_BLOQUE;
+    }
+
+    // Copiar bloques
+    for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
+        if (inodos->blq_inodos[inodo_origen].i_nbloque[i] != NULL_BLOQUE) {
+            // Buscar un bloque libre
+            unsigned short int bloque_libre = NULL_BLOQUE;
+            for (int j = PRIM_BLOQUE_DATOS; j < MAX_BLOQUES_PARTICION; j++) {
+                if (bytemaps->bmap_bloques[j] == 0) {
+                    bloque_libre = j;
+                    break;
+                }
+            }
+
+            // Si no hay bloques libres
+            if (bloque_libre == NULL_BLOQUE) {
+                printf("No hay bloques libres disponibles\n");
+                // Limpiar el inodo y sus bloques asignados hasta ahora
+                bytemaps->bmap_inodos[inodo_destino] = 0;
+                for (int k = 0; k < i; k++) {
+                    if (inodos->blq_inodos[inodo_destino].i_nbloque[k] != NULL_BLOQUE) {
+                        bytemaps->bmap_bloques[inodos->blq_inodos[inodo_destino].i_nbloque[k]] = 0;
+                    }
+                }
+                return;
+            }
+
+            // Copiar el contenido del bloque
+            memcpy(&bloques[bloque_libre - PRIM_BLOQUE_DATOS].dato,
+                   &bloques[inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS].dato,
+                   SIZE_BLOQUE);
+
+            // Asignar el bloque al inodo destino
+            inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_libre;
+
+            // Marcar el bloque como ocupado
+            bytemaps->bmap_bloques[bloque_libre] = 1;
+        }
+    }
+
+    // Crear entrada en el directorio
+    for (int i = 0; i < MAX_FICHEROS; i++) {
+        if (directorio[i].dir_inodo == NULL_INODO) {
+            strncpy(directorio[i].dir_nfich, nombre2, LEN_NFICH - 1);
+            directorio[i].dir_nfich[LEN_NFICH - 1] = '\0';  // Asegurar terminación null
+            directorio[i].dir_inodo = inodo_destino;
+            break;
+        }
+    }
+
+    printf("El fichero %s ha sido copiado a %s exitosamente\n", nombre, nombre2);
 }
+
 // Función principal
 int main() {
     // Variables necesarias
@@ -306,13 +377,16 @@ int main() {
             printf("Copiar\n");
             char nombreExistente[LEN_NFICH];
             char nuevo_nombre[LEN_NFICH];
+
             // Eliminar el salto de línea de fgets
             comando[strcspn(comando, "\n")] = 0;
 
-
             // Extraer el nombre del fichero directamente del comando
             sscanf(comando + strlen("copy"), "%s %s", nombreExistente, nuevo_nombre);
-            copyFile(directorio, &bytemaps, nombreExistente, nuevo_nombre);
+
+            // Asumiendo que tienes variables globales o pasadas como parámetros:
+            copyFile(directorio, &bytemaps, &inodos, bloques, nombreExistente, nuevo_nombre);
+
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
         }
