@@ -182,7 +182,7 @@ void renameFile(EXT_ENTRADA_DIR *directorio, char *nombre, char *nuevo_nombre)
 
 }
 
-void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
+void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *ext_blq_inodos)
 {
     // Buscar el fichero
     for (int i = 0; i < MAX_FICHEROS; i++)
@@ -190,11 +190,25 @@ void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre)
         //Compruebo que existe el fichero con el nombre
         if (strcmp(directorio[i].dir_nfich, nombre) == 0)
         {
-            printf("Fichero enncontrado\n");
+            //Marcar como libre el inodo
+            bytemaps->bmap_inodos[directorio[i].dir_inodo] = 0;
+
+            // Liberar los bloques del inodo
+            for (int j = 0; j < MAX_NUMS_BLOQUE_INODO; j++) {
+                if (ext_blq_inodos->blq_inodos[directorio[i].dir_inodo].i_nbloque[j] != NULL_BLOQUE) {
+                    bytemaps->bmap_bloques[ext_blq_inodos->blq_inodos[directorio[i].dir_inodo].i_nbloque[j]] = 0;
+                }
+            }
+
+            //Liberar la entrada del directorio
+            directorio[i].dir_inodo= NULL_INODO;
+            directorio[i].dir_nfich[0] = '\0';
+
+            printf("Fichero %s eliminado\n", nombre);
             return;
         }
     }
-    printf("El fichero %s no existe\n", nombre);
+    printf("ERROR: fichero %s no encontrado\n", nombre);
 }
 
 void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos, EXT_DATOS *bloques, char *nombre, char *nombre2) {
@@ -371,8 +385,8 @@ int main() {
 
             // Extraer el nombre del fichero directamente del comando
             sscanf(comando + strlen("remove"), "%s", nombreFichero);
-            printf("Remover\n");
-            removeFile(directorio, nombreFichero);
+            removeFile(directorio, nombreFichero, &bytemaps, &ext_blq_inodos);
+
         }else if (strcmp(orden, "copy") == 0){
             printf("Copiar\n");
             char nombreExistente[LEN_NFICH];
@@ -385,7 +399,7 @@ int main() {
             sscanf(comando + strlen("copy"), "%s %s", nombreExistente, nuevo_nombre);
 
             // Asumiendo que tienes variables globales o pasadas como parámetros:
-            copyFile(directorio, &bytemaps, &inodos, bloques, nombreExistente, nuevo_nombre);
+            //copyFile(directorio, &bytemaps, &inodos, bloques, nombreExistente, nuevo_nombre);
 
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
