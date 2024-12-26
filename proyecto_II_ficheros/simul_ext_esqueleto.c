@@ -9,6 +9,31 @@ int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argu
     sscanf(strcomando, "%s %s %s", orden, argumento1, argumento2);
     return strcmp(orden, "salir") != 0; // Retorna 0 si el comando es "salir"
 }
+
+void ActualizarSuperbloque(EXT_SIMPLE_SUPERBLOCK *superbloque, EXT_BYTE_MAPS *bytemaps)
+{
+    unsigned int numBloques = 0, numInodos = 0;
+    for (int i = 0; i<MAX_INODOS; i++)
+    {
+        if (bytemaps->bmap_inodos[i] == 1)
+        {
+            numInodos++;
+        }
+    }
+    //Actualizo el numero de inodos libres del superbloque
+    superbloque->s_free_inodes_count = MAX_INODOS - numInodos;
+
+    for (int i = 0; i < MAX_BLOQUES_PARTICION; i++)
+    {
+        if (bytemaps->bmap_bloques[i] == 1)
+        {
+            numBloques++;
+        }
+    }
+    // Actualizo el numero de bloques libres del superbloque
+    superbloque->s_free_blocks_count = MAX_BLOQUES_PARTICION - numBloques;
+
+}
 unsigned int* NumeroBloques(EXT_SIMPLE_INODE *inodo, unsigned int *num_bloques){
     unsigned int *i_nbloques = NULL;
     unsigned int capacidad = 0;
@@ -211,7 +236,7 @@ void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre, EXT_BYTE_MAPS *bytema
     printf("ERROR: fichero %s no encontrado\n", nombre);
 }
 
-void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos, EXT_DATOS *bloques, char *nombre, char *nombre2) {
+void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos, EXT_DATOS *bloques,EXT_SIMPLE_SUPERBLOCK *superbloque , char *nombre, char *nombre2) {
 
     // Buscar el fichero original en el directorio
     unsigned short int inodo_origen = NULL_INODO;
@@ -244,7 +269,6 @@ void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INOD
             break;
         }
     }
-
     // Si no hay inodo libre
     if (inodo_destino == NULL_INODO) {
         printf("No hay inodos libres disponibles\n");
@@ -254,9 +278,21 @@ void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INOD
     // Marcar el inodo como ocupado
     bytemaps->bmap_inodos[inodo_destino] = 1;
 
+    printf("inodo_destino: %d\n", inodo_destino);
+
+    // Crear entrada en el directorio
+    for (int i = 0; i < MAX_FICHEROS; i++) {
+        if (directorio[i].dir_inodo == NULL_INODO) {
+            strncpy(directorio[i].dir_nfich, nombre2, LEN_NFICH - 1);
+            directorio[i].dir_nfich[LEN_NFICH - 1] = '\0';  // Asegurar terminación null
+            directorio[i].dir_inodo = inodo_destino;
+            break;
+        }
+    }
+
     // Copiar el tamaño del fichero y preparar el inodo destino
     inodos->blq_inodos[inodo_destino].size_fichero = inodos->blq_inodos[inodo_origen].size_fichero;
-
+    printf("size_fichero: %d\n", inodos->blq_inodos[inodo_destino].size_fichero);
     // Inicializar todos los bloques del nuevo inodo a NULL_BLOQUE
     for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
         inodos->blq_inodos[inodo_destino].i_nbloque[i] = NULL_BLOQUE;
@@ -288,9 +324,9 @@ void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INOD
             }
 
             // Copiar el contenido del bloque
-            memcpy(&bloques[bloque_libre - PRIM_BLOQUE_DATOS].dato,
-                   &bloques[inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS].dato,
-                   SIZE_BLOQUE);
+            memcpy(&(bloques[bloque_libre - PRIM_BLOQUE_DATOS]),
+                  &(bloques[inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS]),
+                  SIZE_BLOQUE);
 
             // Asignar el bloque al inodo destino
             inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_libre;
@@ -299,18 +335,7 @@ void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INOD
             bytemaps->bmap_bloques[bloque_libre] = 1;
         }
     }
-
-    // Crear entrada en el directorio
-    for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (directorio[i].dir_inodo == NULL_INODO) {
-            strncpy(directorio[i].dir_nfich, nombre2, LEN_NFICH - 1);
-            directorio[i].dir_nfich[LEN_NFICH - 1] = '\0';  // Asegurar terminación null
-            directorio[i].dir_inodo = inodo_destino;
-            break;
-        }
-    }
-
-    printf("El fichero %s ha sido copiado a %s exitosamente\n", nombre, nombre2);
+    ActualizarSuperbloque(superbloque, bytemaps);
 }
 
 // Función principal
@@ -398,8 +423,8 @@ int main() {
             // Extraer el nombre del fichero directamente del comando
             sscanf(comando + strlen("copy"), "%s %s", nombreExistente, nuevo_nombre);
 
-            // Asumiendo que tienes variables globales o pasadas como parámetros:
-            //copyFile(directorio, &bytemaps, &inodos, bloques, nombreExistente, nuevo_nombre);
+
+            copyFile(directorio, &bytemaps, &ext_blq_inodos, memdatos, &superbloque, nombreExistente, nuevo_nombre);
 
         }else {
             printf("ERROR: Comando ilegal [bytemaps,copy,info,dir,imprimir,rename,salir].\n");
@@ -420,3 +445,39 @@ int main() {
     printf("Sistema de archivos guardado. ¡Hasta luego!\n");
     return 0;
 }
+/*
+if (inodos->blq_inodos[inodo_origen].i_nbloque[i] != NULL_BLOQUE) {
+            // Buscar un bloque libre
+            unsigned short int bloque_libre = NULL_BLOQUE;
+            for (int j = PRIM_BLOQUE_DATOS; j < MAX_BLOQUES_PARTICION; j++) {
+                if (bytemaps->bmap_bloques[j] == 0) {
+                    bloque_libre = j;
+                    break;
+                }
+            }
+
+            // Si no hay bloques libres
+            if (bloque_libre == NULL_BLOQUE) {
+                printf("No hay bloques libres disponibles\n");
+                // Limpiar el inodo y sus bloques asignados hasta ahora
+                bytemaps->bmap_inodos[inodo_destino] = 0;
+                for (int k = 0; k < i; k++) {
+                    if (inodos->blq_inodos[inodo_destino].i_nbloque[k] != NULL_BLOQUE) {
+                        bytemaps->bmap_bloques[inodos->blq_inodos[inodo_destino].i_nbloque[k]] = 0;
+                    }
+                }
+                return;
+            }
+
+            // Copiar el contenido del bloque
+            memcpy(&bloques[bloque_libre - PRIM_BLOQUE_DATOS]->dato,
+            &bloques[inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS]->dato,
+            SIZE_BLOQUE);
+
+            // Asignar el bloque al inodo destino
+            inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_libre;
+
+            // Marcar el bloque como ocupado
+            bytemaps->bmap_bloques[bloque_libre] = 1;
+        }
+ */
