@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cabeceras.h" // Incluimos el archivo de cabeceras proporcionado
+#include "cabeceras.h"
 
 // Implementación de ComprobarComando
 int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argumento2) {
@@ -121,82 +121,58 @@ void Info(EXT_SIMPLE_SUPERBLOCK *superbloque) {
     printf("Primer bloque de datos = %u\n", superbloque->s_first_data_block);
 }
 
-void imprimirFichero(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *blq_inodos, EXT_DATOS *bloques, char *nombreFichero) {
-    unsigned short int inodo = NULL_INODO;
+void imprimirFichero(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos,
+                     EXT_DATOS *memdatos, char *nombreFichero) {
+    // Buscar el fichero
+    int encontrado = 0;
+    unsigned short int numInodo;
 
-    // 1. Comprobar que existe el fichero
-    for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (strcmp(directorio[i].dir_nfich, nombreFichero) == 0) {
-            inodo = directorio[i].dir_inodo;
-            printf("DEBUG: Encontrado fichero '%s' en inodo %d\n", nombreFichero, inodo);
+    for(int i = 0; i < MAX_FICHEROS; i++) {
+        if(strcmp(directorio[i].dir_nfich, nombreFichero) == 0) {
+            encontrado = 1;
+            numInodo = directorio[i].dir_inodo;
             break;
         }
     }
 
-    if (inodo == NULL_INODO) {
-        printf("Archivo no encontrado\n");
+    if(!encontrado) {
+        printf("ERROR: Fichero %s no encontrado\n", nombreFichero);
         return;
     }
 
-    // Debuggear información del inodo
-    printf("DEBUG: Tamaño del fichero: %d bytes\n", blq_inodos->blq_inodos[inodo].size_fichero);
-    printf("DEBUG: Bloques asignados: ");
-    for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
-        if (blq_inodos->blq_inodos[inodo].i_nbloque[i] != NULL_BLOQUE) {
-            printf("%d ", blq_inodos->blq_inodos[inodo].i_nbloque[i]);
-        }
-    }
-    printf("\n");
+    // Obtener el tamaño del fichero
+    unsigned int tamano = inodos->blq_inodos[numInodo].size_fichero;
 
-    // 2. Preparar un buffer para concatenar todo el contenido
-    unsigned int size_fichero = blq_inodos->blq_inodos[inodo].size_fichero;
-    char *contenido = (char *)malloc(size_fichero + 1);  // +1 para el terminador nulo
-    if (!contenido) {
-        printf("Error de memoria\n");
+    // Crear buffer para almacenar todo el contenido
+    char *contenido = (char *)malloc(tamano + 1);
+    if(!contenido) {
+        printf("ERROR: No se pudo asignar memoria\n");
         return;
     }
-    unsigned int pos_actual = 0;
 
-    // 3. Concatenar los bloques
-    printf("DEBUG: Tamaño del fichero: %d bytes\n", blq_inodos->blq_inodos[inodo].size_fichero);
-    printf("DEBUG: Bloques asignados: ");
-    for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
-        unsigned short bloque = blq_inodos->blq_inodos[inodo].i_nbloque[i];
-        if (bloque != NULL_BLOQUE) {
-            // Calcular cuántos bytes copiar de este bloque
-            unsigned int bytes_a_copiar =
-                (pos_actual + SIZE_BLOQUE > size_fichero) ?
-                (size_fichero - pos_actual) : SIZE_BLOQUE;
-            printf("DEBUG: Copiando bloque %d, offset=%d, bytes=%d\n",
-                   bloque, bloque - PRIM_BLOQUE_DATOS, bytes_a_copiar);
-            // Mostrar los primeros bytes del bloque antes de copiar
-            printf("DEBUG: Primeros bytes del bloque: ");
-            for(int j = 0; j < 10 && j < bytes_a_copiar; j++) {
-                printf("%02X ", (unsigned char)bloques[bloque - PRIM_BLOQUE_DATOS].dato[j]);
-            }
-            printf("\n");
-            // Copiar el bloque al buffer
-            memcpy(contenido + pos_actual,
-                   bloques[bloque - PRIM_BLOQUE_DATOS].dato,
-                   bytes_a_copiar);
+    // Posición actual en el buffer
+    unsigned int pos = 0;
 
-            pos_actual += bytes_a_copiar;
+    // Copiar contenido de cada bloque
+    for(int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
+        unsigned short int numBloque = inodos->blq_inodos[numInodo].i_nbloque[i];
+        if(numBloque == NULL_BLOQUE) break;
 
-            if (pos_actual >= size_fichero) break;
-        }
+        // Calcular cuántos bytes copiar de este bloque
+        unsigned int bytesACopiar = (tamano - pos < SIZE_BLOQUE) ?
+                                   tamano - pos : SIZE_BLOQUE;
+
+        // Copiar datos del bloque al buffer
+        memcpy(contenido + pos, memdatos[numBloque - PRIM_BLOQUE_DATOS].dato,
+               bytesACopiar);
+        pos += bytesACopiar;
     }
 
-    // 4. Añadir terminador nulo y imprimir usando puts
-    contenido[size_fichero] = '\0';
-    printf("DEBUG: Contenido final (hex): ");
-    for(int i = 0; i < size_fichero && i < 20; i++) {
-        printf("%02X ", (unsigned char)contenido[i]);
-    }
-    printf("\n");
-    contenido[size_fichero] = '\0';
+    // Añadir terminador de cadena
+    contenido[tamano] = '\0';
+
+    // Imprimir contenido y liberar memoria
     puts(contenido);
-
-    // 5. Liberar memoria
     free(contenido);
 }
 
@@ -257,131 +233,95 @@ void removeFile(EXT_ENTRADA_DIR *directorio, char *nombre, EXT_BYTE_MAPS *bytema
     printf("ERROR: fichero %s no encontrado\n", nombre);
 }
 
-void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos, EXT_DATOS *bloques,EXT_SIMPLE_SUPERBLOCK *superbloque , char *nombre, char *nombre2) {
+void copyFile(EXT_ENTRADA_DIR *directorio, EXT_BYTE_MAPS *bytemaps, EXT_BLQ_INODOS *inodos,
+    EXT_DATOS *memdatos,EXT_SIMPLE_SUPERBLOCK *superbloque , char *nombre, char *nombre2) {
 
-    // Buscar el fichero original en el directorio
+    /// Find source file with exact case matching
     unsigned short int inodo_origen = NULL_INODO;
     for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (strcmp(directorio[i].dir_nfich, nombre) == 0) {
+        if (directorio[i].dir_inodo != NULL_INODO && strcmp(directorio[i].dir_nfich, nombre) == 0) {
             inodo_origen = directorio[i].dir_inodo;
             break;
         }
     }
-
-    // Si no se encuentra el fichero origen
     if (inodo_origen == NULL_INODO) {
-        printf("No existe ningún fichero con el nombre: %s\n", nombre);
+        printf("No existe el fichero: %s\n", nombre);
         return;
     }
 
-    // Comprobar que no exista un fichero con el nombre nuevo
+    // Find free directory entry
+    int dir_entry = -1;
     for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (strcmp(directorio[i].dir_nfich, nombre2) == 0) {
-            printf("El fichero %s ya existe\n", nombre2);
-            return;
+        if (directorio[i].dir_inodo == NULL_INODO) {
+            dir_entry = i;
+            break;
         }
     }
+    if (dir_entry == -1) {
+        printf("Directorio lleno\n");
+        return;
+    }
 
-    // Buscar un inodo libre
+    // Find free inode
     unsigned short int inodo_destino = NULL_INODO;
-    for (int i = 0; i < MAX_INODOS; i++) {
+    for (int i = 3; i < MAX_INODOS; i++) {
         if (bytemaps->bmap_inodos[i] == 0) {
             inodo_destino = i;
             break;
         }
     }
-    // Si no hay inodo libre
     if (inodo_destino == NULL_INODO) {
-        printf("No hay inodos libres disponibles\n");
+        printf("No hay inodos libres\n");
         return;
     }
 
-    // Marcar el inodo como ocupado
+    // Initialize destination inode
     bytemaps->bmap_inodos[inodo_destino] = 1;
-
-    printf("inodo_destino: %d\n", inodo_destino);
-
-    // Crear entrada en el directorio
-    for (int i = 0; i < MAX_FICHEROS; i++) {
-        if (directorio[i].dir_inodo == NULL_INODO) {
-            strncpy(directorio[i].dir_nfich, nombre2, LEN_NFICH - 1);
-            directorio[i].dir_nfich[LEN_NFICH - 1] = '\0';  // Asegurar terminación null
-            directorio[i].dir_inodo = inodo_destino;
-            break;
-        }
-    }
-
-    // Copiar el tamaño del fichero y preparar el inodo destino
     inodos->blq_inodos[inodo_destino].size_fichero = inodos->blq_inodos[inodo_origen].size_fichero;
-    printf("size_fichero: %d\n", inodos->blq_inodos[inodo_destino].size_fichero);
-    // Inicializar todos los bloques del nuevo inodo a NULL_BLOQUE
     for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
         inodos->blq_inodos[inodo_destino].i_nbloque[i] = NULL_BLOQUE;
     }
 
-    // Copiar bloques
+    // Copy blocks
     for (int i = 0; i < MAX_NUMS_BLOQUE_INODO; i++) {
-        if (inodos->blq_inodos[inodo_origen].i_nbloque[i] != NULL_BLOQUE) {
-            // Buscar un bloque libre
-            unsigned short int bloque_libre = NULL_BLOQUE;
-            for (int j = PRIM_BLOQUE_DATOS; j < MAX_BLOQUES_PARTICION; j++) {
-                if (bytemaps->bmap_bloques[j] == 0) {
-                    bloque_libre = j;
-                    break;
-                }
+        unsigned short bloque_origen = inodos->blq_inodos[inodo_origen].i_nbloque[i];
+        if (bloque_origen == NULL_BLOQUE) break;
+
+        // Find free block
+        unsigned short int bloque_destino = NULL_BLOQUE;
+        for (int j = PRIM_BLOQUE_DATOS; j < MAX_BLOQUES_PARTICION; j++) {
+            if (bytemaps->bmap_bloques[j] == 0) {
+                bloque_destino = j;
+                break;
             }
-
-            // Si no hay bloques libres
-            if (bloque_libre == NULL_BLOQUE) {
-                printf("No hay bloques libres disponibles\n");
-                // Limpiar el inodo y sus bloques asignados hasta ahora
-                bytemaps->bmap_inodos[inodo_destino] = 0;
-                for (int k = 0; k < i; k++) {
-                    if (inodos->blq_inodos[inodo_destino].i_nbloque[k] != NULL_BLOQUE) {
-                        bytemaps->bmap_bloques[inodos->blq_inodos[inodo_destino].i_nbloque[k]] = 0;
-                    }
-                }
-                return;
-            }
-
-            printf("DEBUG: Copiando bloque %d: origen=%d, destino=%d\n",
-                   i,
-                   inodos->blq_inodos[inodo_origen].i_nbloque[i],
-                   bloque_libre);
-
-            // Verificar los índices antes de la copia
-            int origen_idx = inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS;
-            int destino_idx = bloque_libre - PRIM_BLOQUE_DATOS;
-
-            printf("DEBUG: Índices en array: origen=%d, destino=%d\n",
-                   origen_idx, destino_idx);
-
-            // Verificar que los índices sean válidos
-            if (origen_idx < 0 || destino_idx < 0) {
-                printf("ERROR: Índices negativos detectados\n");
-                continue;
-            }
-
-            // Realizar la copia con verificación
-            memcpy(&(bloques[destino_idx]),
-                   &(bloques[origen_idx]),
-                   SIZE_BLOQUE);
-
-            // Verificar que el bloque se copió correctamente
-            printf("DEBUG: Primeros bytes del bloque copiado: ");
-            for(int j = 0; j < 10 && j < SIZE_BLOQUE; j++) {
-                printf("%02X ", bloques[destino_idx].dato[j]);
-            }
-            printf("\n");
-
-            // Asignar el bloque al inodo destino
-            inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_libre;
-
-            // Marcar el bloque como ocupado
-            bytemaps->bmap_bloques[bloque_libre] = 1;
         }
+        if (bloque_destino == NULL_BLOQUE) {
+            printf("No hay bloques libres\n");
+            // Cleanup
+            bytemaps->bmap_inodos[inodo_destino] = 0;
+            for (int k = 0; k < i; k++) {
+                if (inodos->blq_inodos[inodo_destino].i_nbloque[k] != NULL_BLOQUE) {
+                    bytemaps->bmap_bloques[inodos->blq_inodos[inodo_destino].i_nbloque[k]] = 0;
+                }
+            }
+            return;
+        }
+
+        // Copy block data and update structures
+        bytemaps->bmap_bloques[bloque_destino] = 1;
+        memcpy(&memdatos[bloque_destino - PRIM_BLOQUE_DATOS],
+               &memdatos[bloque_origen - PRIM_BLOQUE_DATOS],
+               SIZE_BLOQUE);
+        inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_destino;
     }
+
+    // Update directory
+    strncpy(directorio[dir_entry].dir_nfich, nombre2, LEN_NFICH-1);
+    directorio[dir_entry].dir_nfich[LEN_NFICH-1] = '\0';
+    directorio[dir_entry].dir_inodo = inodo_destino;
+
     ActualizarSuperbloque(superbloque, bytemaps);
+
 }
 
 // Función principal
@@ -492,39 +432,3 @@ int main() {
     printf("Sistema de archivos guardado. ¡Hasta luego!\n");
     return 0;
 }
-/*
-if (inodos->blq_inodos[inodo_origen].i_nbloque[i] != NULL_BLOQUE) {
-            // Buscar un bloque libre
-            unsigned short int bloque_libre = NULL_BLOQUE;
-            for (int j = PRIM_BLOQUE_DATOS; j < MAX_BLOQUES_PARTICION; j++) {
-                if (bytemaps->bmap_bloques[j] == 0) {
-                    bloque_libre = j;
-                    break;
-                }
-            }
-
-            // Si no hay bloques libres
-            if (bloque_libre == NULL_BLOQUE) {
-                printf("No hay bloques libres disponibles\n");
-                // Limpiar el inodo y sus bloques asignados hasta ahora
-                bytemaps->bmap_inodos[inodo_destino] = 0;
-                for (int k = 0; k < i; k++) {
-                    if (inodos->blq_inodos[inodo_destino].i_nbloque[k] != NULL_BLOQUE) {
-                        bytemaps->bmap_bloques[inodos->blq_inodos[inodo_destino].i_nbloque[k]] = 0;
-                    }
-                }
-                return;
-            }
-
-            // Copiar el contenido del bloque
-            memcpy(&bloques[bloque_libre - PRIM_BLOQUE_DATOS]->dato,
-            &bloques[inodos->blq_inodos[inodo_origen].i_nbloque[i] - PRIM_BLOQUE_DATOS]->dato,
-            SIZE_BLOQUE);
-
-            // Asignar el bloque al inodo destino
-            inodos->blq_inodos[inodo_destino].i_nbloque[i] = bloque_libre;
-
-            // Marcar el bloque como ocupado
-            bytemaps->bmap_bloques[bloque_libre] = 1;
-        }
- */
