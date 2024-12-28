@@ -72,7 +72,7 @@ void Directorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos) {
     for (int i = 1; i < MAX_FICHEROS; i++) {
         if (directorio[i].dir_inodo != NULL_INODO) {
             EXT_SIMPLE_INODE *inodo = &inodos->blq_inodos[directorio[i].dir_inodo];
-            printf("%s (%u bytes, inodo %d) bloques:",
+            printf("%s tamaño:%u  inodo:%d bloques:",
                    directorio[i].dir_nfich,
                    inodo->size_fichero,
                    directorio[i].dir_inodo);
@@ -156,7 +156,6 @@ int Borrar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos,
     directorio[pos].dir_inodo = NULL_INODO;
     memset(directorio[pos].dir_nfich, 0, LEN_NFICH);
 
-    printf("Fichero %s eliminado\n", nombre);
     return 0;
 }
 
@@ -265,7 +264,6 @@ int Copiar(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos, EXT_BYTE_MAPS *e
     strcpy(directorio[pos_destino].dir_nfich, nombredestino);
     directorio[pos_destino].dir_inodo = nuevo_inodo;
 
-    printf("Copiado %s a %s\n", nombreorigen, nombredestino);
     return 0;
 }
 
