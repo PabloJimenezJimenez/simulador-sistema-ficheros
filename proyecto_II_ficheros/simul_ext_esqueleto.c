@@ -5,7 +5,7 @@
 
 #define LONGITUD_COMANDO 100
 
-// Function prototypes as specified in the skeleton
+// Function prototypes
 void Printbytemaps(EXT_BYTE_MAPS *ext_bytemaps);
 int ComprobarComando(char *strcomando, char *orden, char *argumento1, char *argumento2);
 void LeeSuperBloque(EXT_SIMPLE_SUPERBLOCK *psup);
@@ -72,7 +72,7 @@ void Directorio(EXT_ENTRADA_DIR *directorio, EXT_BLQ_INODOS *inodos) {
     for (int i = 1; i < MAX_FICHEROS; i++) {
         if (directorio[i].dir_inodo != NULL_INODO) {
             EXT_SIMPLE_INODE *inodo = &inodos->blq_inodos[directorio[i].dir_inodo];
-            printf("%s tamaño:%u  inodo:%d bloques:",
+            printf("%-15s  tamaño:%-10u   inodo:%-2d bloques:",
                    directorio[i].dir_nfich,
                    inodo->size_fichero,
                    directorio[i].dir_inodo);
