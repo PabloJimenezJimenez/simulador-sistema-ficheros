@@ -10,4 +10,4 @@
 
 
 ## LINK REPOSITORIO DE GITHUB
-[Link_guthub](https://github.com/PabloJimenezJimenez/simulador-sistema-ficheros)
+[Link_github](https://github.com/PabloJimenezJimenez/simulador-sistema-ficheros)
